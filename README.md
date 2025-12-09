@@ -1,6 +1,7 @@
 # Talkie‑Lab
 
-Talkie‑Lab is an experimental LLM agent platform focused on observability, reproducibility, and controlled execution.
+Talkie‑Lab is an experimental LLM agent platform focused on observability, reproducibility, and
+controlled execution.
 
 It is designed as an **internal‑grade AI workspace** where prompts, models, and agent decisions
 are **versioned, inspectable, and replayable** at runtime.
@@ -14,6 +15,10 @@ This project was built to explore:
 Everything—from routing, streaming, metrics, prompt CMS, and inspection UI—
 is implemented as a **single‑developer, full‑stack engineering project**.
 
+## Preview
+
+![Chat UI](./docs/screenshots/chat-1.png)
+
 Talkie‑Lab is designed as an **internal‑grade AI workspace** where every conversation,
 prompt, and agent decision can be **versioned, replayed, and measured**.
 
@@ -23,7 +28,8 @@ prompt, and agent decision can be **versioned, replayed, and measured**.
 - ✅ Streaming‑level latency & token metrics (first‑token, overhead, provider)
 - ✅ OpenAI Responses–compatible router & provider abstraction
 
-This project is **designed and implemented as a solo engineering project** to explore real‑world LLM platform
+This project is **designed and implemented as a solo engineering project** to explore real‑world LLM
+platform
 architecture using Next.js, React 19, Prisma, and PostgreSQL.
 
 ## What makes it different
@@ -34,7 +40,8 @@ It is focused on treating **LLM systems as debuggable, observable software syste
 Key differentiators:
 
 - **Streaming‑level observability**
-    - First‑token latency, overhead latency, provider latency, and token usage are measured at the chunk level
+    - First‑token latency, overhead latency, provider latency, and token usage are measured at the
+      chunk level
     - Metrics are visualized in real time during inference
 
 - **Reproducible conversation state**
@@ -54,7 +61,8 @@ Key differentiators:
     - Strict schema validation with Zod
     - Metrics, prompts, agents, and messages share a single coherent data model
 
-The goal is not just to “chat with an LLM”, but to **inspect, reproduce, and control how LLM systems actually behave in
+The goal is not just to “chat with an LLM”, but to **inspect, reproduce, and control how LLM systems
+actually behave in
 production‑like conditions**.
 
 ## Features
@@ -80,10 +88,12 @@ production‑like conditions**.
 
 ## Tech stack
 
-- App: Next.js App Router, React 19 (React Compiler enabled), Tailwind CSS v4, shadcn/ui, Radix primitives, lucide-react
+- App: Next.js App Router, React 19 (React Compiler enabled), Tailwind CSS v4, shadcn/ui, Radix
+  primitives, lucide-react
 - Data: Prisma (PostgreSQL) with generated client at `src/generated/prisma`
 - Auth: NextAuth (GitHub OAuth, database sessions)
-- LLM: `src/lib/ai/llm` (model registry, Responses helpers, provider router/stream); agent loop in `src/lib/ai/agents`
+- LLM: `src/lib/ai/llm` (model registry, Responses helpers, provider router/stream); agent loop in
+  `src/lib/ai/agents`
 - Tests: Vitest + jsdom; Playwright for e2e
 - Package manager: pnpm
 
@@ -153,21 +163,30 @@ pnpm dev       # open http://localhost:3000
 ## Project structure (selected)
 
 - Chat UI & flow: `src/components/chat.tsx`, `src/hooks/use-chat.ts`, `src/app/(chat)/chat`
-- Chat API & metrics: `src/app/(chat)/api/chat/route.ts`, `src/lib/repositories/conversation-repository.ts`,
+- Chat API & metrics: `src/app/(chat)/api/chat/route.ts`,
+  `src/lib/repositories/conversation-repository.ts`,
   `prisma/schema.prisma`
-- Inspector & config: `src/components/chat-inspector.tsx`, `src/components/inference-config-provider.tsx`
-- Agent + tools: `src/lib/ai/agents/loop.ts`, `src/lib/ai/agents/tools/*`, router `src/lib/ai/llm/router.ts`
-- Prompt CMS: `src/app/(prompts)/prompts`, `src/components/prompts.tsx`, `src/lib/repositories/prompt-repository.ts`,
+- Inspector & config: `src/components/chat-inspector.tsx`,
+  `src/components/inference-config-provider.tsx`
+- Agent + tools: `src/lib/ai/agents/loop.ts`, `src/lib/ai/agents/tools/*`, router
+  `src/lib/ai/llm/router.ts`
+- Prompt CMS: `src/app/(prompts)/prompts`, `src/components/prompts.tsx`,
+  `src/lib/repositories/prompt-repository.ts`,
   `src/schemas/prompt.ts`
 - Auth: `src/app/(auth)/auth.ts`, `src/app/(auth)/login/page.tsx`
 
 ## Development notes
 
-- `/api/chat` expects OpenAI Responses–compatible streaming. A non‑stream fallback uses `createTextResponseAction`.
-- Model limits and reasoning controls are gated by the registry in `src/lib/ai/llm/model-registry.ts`.
-- Prisma config reads `DATABASE_URL` from `.env` (see `prisma.config.ts`). If you see a Prisma error like “Argument
-  \"url\" is missing in data source block \"db\"”, ensure `DATABASE_URL` is set before running Prisma commands.
-- Home page (`/`) renders `public/README.mdx`. Keep it concise; this README is the canonical project documentation.
+- `/api/chat` expects OpenAI Responses–compatible streaming. A non‑stream fallback uses
+  `createTextResponseAction`.
+- Model limits and reasoning controls are gated by the registry in
+  `src/lib/ai/llm/model-registry.ts`.
+- Prisma config reads `DATABASE_URL` from `.env` (see `prisma.config.ts`). If you see a Prisma error
+  like “Argument
+  \"url\" is missing in data source block \"db\"”, ensure `DATABASE_URL` is set before running
+  Prisma commands.
+- Home page (`/`) renders `public/README.mdx`. Keep it concise; this README is the canonical project
+  documentation.
 
 ## Testing
 
@@ -190,5 +209,6 @@ pnpm dev       # open http://localhost:3000
 
 ## Contributing
 
-This is an experiment‑oriented workspace. Issues and PRs are welcome. See `Agents.md` for additional implementation
+This is an experiment‑oriented workspace. Issues and PRs are welcome. See `Agents.md` for additional
+implementation
 guidelines used in this repo.
