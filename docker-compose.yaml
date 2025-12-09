@@ -1,0 +1,11 @@
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-16} # you can change to desired version
+    container_name: talkie-lab_postgres
+    restart: on-failure
+    ports:
+      - '${POSTGRES_PORT:-55432}:5432'
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-naruto} # desired username
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sasuke} # desired password
+      POSTGRES_DB: ${POSTGRES_DB:-postgres} # desired database name

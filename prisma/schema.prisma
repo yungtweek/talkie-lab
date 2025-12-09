@@ -1,0 +1,307 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model PromptMetadata {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key               String
+  name              String
+  description       String?
+  latestVersion     Int?
+  isArchived        Boolean             @default(false)
+  createdBy         String?
+  createdAt         DateTime            @default(now()) @db.Timestamptz(6)
+  updatedBy         String?
+  updatedAt         DateTime            @default(now()) @db.Timestamptz(6)
+  type              PromptType          @default(misc)
+  promptTags        PromptTag[]
+  prompts           Prompt[]
+  ConversationState ConversationState[]
+
+  @@unique([id, key])
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "idx_prompt_metadata_name_trgm", type: Gin)
+}
+
+model PromptRun {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  promptId  String?  @db.Uuid
+  inputVars Json?
+  model     String?
+  latencyMs Int?
+  createdBy String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  prompt    Prompt?  @relation(fields: [promptId], references: [id], onUpdate: NoAction)
+
+  @@index([promptId, createdAt(sort: Desc)], map: "idx_prompt_runs_version_time")
+}
+
+model PromptTag {
+  promptId       String         @db.Uuid
+  tagId          String         @db.Uuid
+  promptMetadata PromptMetadata @relation(fields: [promptId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tag            Tag            @relation(fields: [tagId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([promptId, tagId])
+  @@index([tagId], map: "idx_prompt_tags_tag_id")
+}
+
+model Prompt {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  metadataId        String              @db.Uuid
+  version           Int
+  alias             String?
+  content           String
+  note              String?
+  responseExample   String?
+  variables         Json?
+  createdBy         String?
+  createdAt         DateTime            @default(now()) @db.Timestamptz(6)
+  updatedBy         String?
+  updatedAt         DateTime            @default(now()) @db.Timestamptz(6)
+  promptRuns        PromptRun[]
+  metadata          PromptMetadata      @relation(fields: [metadataId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  ConversationState ConversationState[]
+
+  @@unique([metadataId, version])
+  @@index([metadataId, version(sort: Desc)], map: "idx_prompts_metadata_id_version")
+}
+
+model Tag {
+  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String      @unique
+  promptTags PromptTag[]
+}
+
+enum PromptType {
+  system
+  task
+  template
+  rag
+  chain
+  evaluation
+  tool
+  misc
+}
+
+/// NextAuth support tables
+model User {
+  id            String         @id @default(cuid())
+  name          String?
+  email         String?        @unique
+  emailVerified DateTime?
+  image         String?
+  type          String         @default("regular")
+  accounts      Account[]
+  sessions      Session[]
+  Conversation  Conversation[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refreshToken      String? @db.Text
+  accessToken       String? @db.Text
+  expiresAt         Int?
+  tokenType         String?
+  scope             String?
+  idToken           String? @db.Text
+  sessionState      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+  developer
+}
+
+enum ConversationVisibility {
+  private
+  shared
+}
+
+model Conversation {
+  id     String  @id @default(uuid()) @db.Uuid
+  // NextAuth / User 테이블이 있다면 여기에 연결 (없으면 나중에 추가해도 됨)
+  userId String? // e.g. User.id (GitHub 로그인 유저)
+  user   User?   @relation(fields: [userId], references: [id])
+
+  title         String? // 대화 제목 (요약용)
+  // optional: 어떤 LLM, 어떤 프롬프트 preset 썼는지 메타 저장해도 됨
+  model         String? // 예: "gpt-5.1-mini", "local:vllm-phi3"
+  metadata      Json? // 태그, 실험 flag, 기타
+  visibility    ConversationVisibility @default(private)
+  shareId       String?                @unique // 공유 링크용
+  archivedAt    DateTime?
+  deletedAt     DateTime?
+  lastMessageAt DateTime?              @default(now())
+  state         ConversationState?
+
+  messages Message[] // 1 : N 관계
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  MessageMetrics MessageMetrics[]
+
+  @@index([userId, createdAt])
+  @@index([userId, lastMessageAt])
+}
+
+model Message {
+  id       String @id @default(cuid())
+  position BigInt @default(autoincrement()) // 안정적 정렬용 전역 시퀀스
+
+  conversationId String       @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role    MessageRole // user / assistant / system / developer
+  content String // 최종 렌더 텍스트 (스트리밍이면 합쳐서 저장)
+
+  // 같은 turn 안에 user → assistant 2개 메시지가 붙을 수 있음
+  turn        Int? // null 가능, 나중에 도입해도 됨
+  indexInTurn Int? // 0=user, 1=assistant 정도로 써도 됨
+
+  // 필요하다면 JSON으로 chunk, retrieval, tool_call 기록도 넣을 수 있음
+  metadata         Json? // RAG 히트 목록, 토큰 수, latency 등
+  latencyMs        Int?
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  mode             String?
+  provider         String? // 예: "openai", "anthropic", "local"
+  modelUsed        String? // 실제 호출된 모델명 (컨버세이션 default와 다를 수 있음)
+  requestId        String? // 외부 요청 식별자
+  traceId          String? // APM/관찰성 trace
+  error            String? // 실패 시 에러 메시지/코드
+
+  createdAt DateTime @default(now())
+
+  toolCalls      ToolCall[]
+  MessageMetrics MessageMetrics[]
+
+  @@unique([conversationId, turn, indexInTurn])
+  @@index([conversationId, createdAt])
+  @@index([conversationId, turn])
+  @@index([conversationId, position])
+}
+
+model MessageMetrics {
+  id String @id @default(cuid())
+
+  conversationId String       @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  messageId String
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  // 실제 호출된 모델 / 프로바이더
+  provider  String? // "openai" | "anthropic" | "local" 등
+  modelUsed String? // ex: "gpt-5.1-mini"
+
+  // generation config 스냅샷
+  temperature     Float?
+  topP            Float?
+  maxOutputTokens Int?
+  reasoningEffort String? // "low" | "medium" | "high" 같은 거
+
+  // 토큰 사용량
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+
+  // 퍼포먼스 / 트레이싱
+  latencyMs         Int?
+  providerLatencyMs Int? // OpenAI / vLLM가 응답하는데 걸린 시간
+  overheadLatencyMs Int? // 우리 쪽 파이프라인(프록시, RAG, DB 등)에서 쓴 시간
+
+  startedAt    DateTime? // LLM 요청 보낸 시점
+  firstTokenAt DateTime? // 첫 chunk/토큰 받은 시점
+  completedAt  DateTime? // 스트림 끝난 시점
+  requestId    String?
+  traceId      String?
+
+  errorMessage String?
+  errorType    String?
+  errorCode    String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([messageId, requestId], map: "ux_message_metrics_message_request")
+  @@index([conversationId, createdAt], map: "idx_message_metrics_conversation_time")
+  @@index([messageId], map: "idx_message_metrics_message_id")
+}
+
+model ToolCall {
+  id        String  @id @default(cuid())
+  messageId String
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  toolCallId String?
+  toolName   String
+  callId     String? // provider가 준 call 식별자
+  arguments  Json?
+  result     Json?
+  status     String? // success / error / pending 등
+
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
+  @@index([callId])
+  @@index([toolCallId])
+}
+
+model ConversationState {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  conversationId String       @unique @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  model            String
+  systemPromptText String?         @db.Text
+  promptMetadataId String?         @db.Uuid
+  promptMetadata   PromptMetadata? @relation(fields: [promptMetadataId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  promptId        String? @db.Uuid
+  prompt          Prompt? @relation(fields: [promptId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  reasoningEffort String?
+  temperature     Float?
+  topP            Float?
+  maxOutputTokens Int?
+
+  provider   String?
+  configHash String?
+
+  createdBy String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([conversationId, createdAt(sort: Desc)])
+}

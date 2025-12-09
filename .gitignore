@@ -1,0 +1,99 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Build output / caches
+.next/
+out/
+build/
+dist/
+.cache/
+.nyc_output/
+
+# Tests / coverage
+coverage/
+
+# Transpiled JS in source folders
+**/src/**/*.js
+**/src/**/*.js.map
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.log
+*.pid
+*.sock
+
+# Environment / secrets
+.env
+.env.*
+.env*
+!.env.example
+.envrc
+.direnv/
+*.pem
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Generated assets
+/src/generated/prisma
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+.fleet/
+.fleet/settings.json
+*.swp
+talkie.iml
+
+# Python virtualenv
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+
+# Hosting / platform
+.vercel/
+
+
+.prettierrc
+
+# Docs / meta
+.docs/
+.codex/
+Agents.md
+
+# Tooling caches / misc
+.turbo/
+.eslintcache
+.parcel-cache/
+.vite/
+.svelte-kit/
+.storybook-static/
+
+# Test runners (e2e)
+playwright-report/
+test-results/
+cypress/videos/
+cypress/screenshots/
+
+# OS additional
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
