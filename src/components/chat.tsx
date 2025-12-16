@@ -56,7 +56,12 @@ export interface ChatProps {
   };
 }
 
-export function Chat({ conversationId, initialMessages, initialState, initialPromptData }: ChatProps) {
+export function Chat({
+  conversationId,
+  initialMessages,
+  initialState,
+  initialPromptData,
+}: ChatProps) {
   const cfg = useInferenceConfig();
   const { artifact } = useArtifactContext();
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(() => {
@@ -92,16 +97,19 @@ export function Chat({ conversationId, initialMessages, initialState, initialPro
 
   const buildRequestBody = useChatRequestBuilder(conversationId, cfg);
 
-  const { messages, isStreaming, error, submitAction, isPending, retry } = useChat(buildRequestBody, {
-    api: '/api/chat',
-    stream: cfg.stream,
-    conversationId,
-    initialMessages: mappedInitialMessages,
-    onConversationCreated: conv => {
-      window.history.replaceState({}, '', `/chat/${conv.id}`);
-      upsert(conv);
+  const { messages, isStreaming, error, submitAction, isPending, retry } = useChat(
+    buildRequestBody,
+    {
+      api: '/api/chat',
+      stream: cfg.stream,
+      conversationId,
+      initialMessages: mappedInitialMessages,
+      onConversationCreated: conv => {
+        window.history.replaceState({}, '', `/chat/${conv.id}`);
+        upsert(conv);
+      },
     },
-  });
+  );
 
   useSelectLatestAssistantMessage(messages, setSelectedMessageId);
 
@@ -141,7 +149,11 @@ export function Chat({ conversationId, initialMessages, initialState, initialPro
               isStreaming={isStreaming}
             />
           </div>
-          <ChatInput submitAction={submitAction} onSubmitHandler={handleUiSubmitSideEffect} isBusy={isBusy} />
+          <ChatInput
+            submitAction={submitAction}
+            onSubmitHandler={handleUiSubmitSideEffect}
+            isBusy={isBusy}
+          />
         </div>
       </div>
       <ChatInspector

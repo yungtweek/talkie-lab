@@ -82,7 +82,7 @@ export default async function RootLayout({
         />
       </head>
       {/*<body className="antialiased">*/}
-      <body className="subpixel-antialiased">
+      <body className="antialiased">
         {/*<Providers>*/}
         <ThemeProvider
           attribute="class"
