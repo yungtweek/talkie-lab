@@ -166,7 +166,7 @@ export default function ChatInspector({
       <header className="flex items-center justify-between border-b px-4 py-3 sticky top-0 z-10">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-sm font-semibold">Chat inspector</h2>
-          <p className="text-xs text-muted-foreground">모델 / 추론 설정을 여기서 바꿀거야</p>
+          {/*<p className="text-xs text-muted-foreground"></p>*/}
         </div>
         {/* 나중에 토글이나 아이콘 넣고 싶으면 여기 */}
       </header>

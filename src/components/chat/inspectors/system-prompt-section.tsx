@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, FileTerminal, RotateCcw } from 'lucide-react';
 import { startTransition, useActionState, useEffect, useState, useRef } from 'react';
 
 import {
@@ -12,7 +12,14 @@ import { useInferenceConfig } from '@/components/inference-config-provider';
 import { Prompts } from '@/components/prompts';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandInput, CommandList } from '@/components/ui/command';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandInput,
+  CommandList,
+} from '@/components/ui/command';
 import {
   Dialog,
   DialogClose,
@@ -25,6 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 import type { PromptListItem } from '@/lib/repositories/prompt-repository';
@@ -33,7 +41,8 @@ interface SystemPromptSectionProps {
   initialPrompts?: PromptListItem[];
 }
 export default function SystemPromptSection({ initialPrompts }: SystemPromptSectionProps) {
-  const { systemPrompt, setSystemPrompt, promptId, setPromptMetadataId, setPromptId } = useInferenceConfig();
+  const { systemPrompt, setSystemPrompt, promptId, setPromptMetadataId, setPromptId } =
+    useInferenceConfig();
   const [openPromptPicker, setOpenPromptPicker] = useState(false);
   const [openPrompt, setOpenPrompt] = useState(false);
   const [localVersions, setLocalVersions] = useState<ListPromptsByMetadataIdState>(() => ({
@@ -115,7 +124,9 @@ export default function SystemPromptSection({ initialPrompts }: SystemPromptSect
   );
 
   const selectedVersion =
-    promptId && localVersions.status === 'success' ? localVersions.prompts.find(v => v.id === promptId) : null;
+    promptId && localVersions.status === 'success'
+      ? localVersions.prompts.find(v => v.id === promptId)
+      : null;
 
   const selectedVersionLabel = selectedVersion
     ? selectedVersion.alias
@@ -124,18 +135,25 @@ export default function SystemPromptSection({ initialPrompts }: SystemPromptSect
     : 'Select Version...';
 
   const isResetActive =
-    promptId !== null ||
+    promptId ||
     systemPrompt.trim().length > 0 ||
     (localVersions.status === 'success' && localVersions.prompts.length > 0);
 
   return (
     <section className="space-y-2">
-      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">System Prompt</h3>
+      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+        System Prompt
+      </h3>
       {localVersions.status === 'success' && localVersions.prompts.length > 1 && (
         <div className="w-full relative">
           <Popover open={openPrompt} onOpenChange={setOpenPrompt}>
             <PopoverTrigger asChild>
-              <Button variant="outline" role="combobox" aria-expanded={openPrompt} className="w-full justify-between">
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={openPrompt}
+                className="w-full justify-between"
+              >
                 {selectedVersionLabel}
                 <ChevronsUpDown className="opacity-50" />
               </Button>
@@ -161,7 +179,9 @@ export default function SystemPromptSection({ initialPrompts }: SystemPromptSect
                         }}
                       >
                         {v.alias ? `${v.version}: ${v.alias}` : `${v.version}`}
-                        <Check className={cn('ml-auto', promptId === v.id ? 'opacity-100' : 'opacity-0')} />
+                        <Check
+                          className={cn('ml-auto', promptId === v.id ? 'opacity-100' : 'opacity-0')}
+                        />
                       </CommandItem>
                     ))}
                   </CommandGroup>
@@ -182,15 +202,25 @@ export default function SystemPromptSection({ initialPrompts }: SystemPromptSect
         />
         <ButtonGroup className="w-full flex items-center justify-end">
           <Dialog open={openPromptPicker} onOpenChange={setOpenPromptPicker}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                Load
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-4xl">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DialogTrigger asChild>
+                  <Button type="button" variant="outline" size="icon-sm">
+                    <FileTerminal />
+                  </Button>
+                </DialogTrigger>
+              </TooltipTrigger>
+
+              <TooltipContent>
+                <p>Load Prompt</p>
+              </TooltipContent>
+            </Tooltip>
+            <DialogContent className="sm:max-w-4xl" onCloseAutoFocus={e => e.preventDefault()}>
               <DialogHeader>
                 <DialogTitle>Prompts</DialogTitle>
-                <DialogDescription>Anyone who has this link will be able to view this.</DialogDescription>
+                <DialogDescription>
+                  Anyone who has this link will be able to view this.
+                </DialogDescription>
               </DialogHeader>
               <div className="overscroll-contain max-h-[420px] overflow-auto">
                 <Prompts
@@ -213,22 +243,30 @@ export default function SystemPromptSection({ initialPrompts }: SystemPromptSect
             </DialogContent>
           </Dialog>
 
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!isResetActive}
-            onClick={() => {
-              if (!isResetActive) return;
-              setSystemPrompt('');
-              setLocalVersions({ status: 'success', prompts: [] });
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                disabled={!isResetActive}
+                onClick={() => {
+                  if (!isResetActive) return;
+                  setSystemPrompt('');
+                  setLocalVersions({ status: 'success', prompts: [] });
 
-              // ✅ Provider state도 초기화
-              setPromptMetadataId(null);
-              setPromptId(null);
-            }}
-          >
-            Reset
-          </Button>
+                  // ✅ Provider state도 초기화
+                  setPromptMetadataId(null);
+                  setPromptId(null);
+                }}
+              >
+                <RotateCcw />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Reset Prompt</p>
+            </TooltipContent>
+          </Tooltip>
         </ButtonGroup>
       </div>
     </section>

@@ -205,7 +205,7 @@
 /* 여기부터 네 markdown 영역 복원용 preset */
 @layer components {
     .message-body {
-        @apply text-[15px] leading-7 text-neutral-100 space-y-4;
+        @apply text-[15px] leading-7 text-foreground space-y-4;
 
         > :first-child {
             @apply mt-0;
@@ -244,19 +244,19 @@
         }
 
         a {
-            @apply text-sky-400 underline underline-offset-2;
+            @apply text-primary underline underline-offset-2;
         }
 
         code {
-            @apply bg-neutral-900/90 text-neutral-100 px-1.5 py-0.5 rounded text-xs;
+            @apply bg-muted text-foreground px-1.5 py-0.5 rounded text-xs;
         }
 
         pre {
-            @apply bg-neutral-900/90 text-neutral-50 px-4 py-3 rounded-lg text-[13px] leading-6 overflow-x-auto my-4;
+            @apply bg-muted text-foreground px-4 py-3 rounded-lg text-[13px] leading-6 overflow-x-auto my-4;
         }
 
         blockquote {
-            @apply border-l-4 border-neutral-700/80 pl-4 italic text-neutral-200 my-4;
+            @apply border-l-4 border-border pl-4 italic text-muted-foreground my-4;
         }
 
         > :last-child {
