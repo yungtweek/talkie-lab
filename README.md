@@ -65,6 +65,10 @@ The goal is not just to “chat with an LLM”, but to **inspect, reproduce, and
 actually behave in
 production‑like conditions**.
 
+### Agent-driven prompt evolution (Preview)
+
+![Agent demo](./docs/screenshots/agent-prompt-demo.png)
+
 ## Features
 
 - Streaming chat workspace
