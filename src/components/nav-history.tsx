@@ -2,7 +2,7 @@
 import { IconDots, IconTrash } from '@tabler/icons-react';
 import { HistoryIcon, Clock, ChevronRight, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -32,12 +32,16 @@ export function NavHistory() {
 
   const { isMobile } = useSidebar();
   const pathname = usePathname();
+  const router = useRouter();
 
   const handleArchive = async (conversation: ConversationItem) => {
     try {
       const restoreIndex = data?.items.findIndex(i => i.id === conversation.id) ?? -1;
 
       await archive(conversation.id, true);
+      if (pathname === `/chat/${conversation.id}`) {
+        router.replace('/');
+      }
 
       remove(conversation.id); // UI optimistic sync
 

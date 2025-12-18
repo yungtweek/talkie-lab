@@ -1,6 +1,7 @@
 'use client';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import { useArtifactContext } from '@/components/artifact-provider';
 import ChatConversation from '@/components/chat-conversation';
@@ -17,6 +18,7 @@ import {
 } from '@/hooks/use-chat-scroll';
 // import { useConversationsQuery } from '@/hooks/use-conversations-query';
 import { useConversationsQuery } from '@/hooks/use-conversations-query';
+import { savePendingSubmit, takePendingSubmit } from '@/lib/pending-submit';
 import { toChatMetricsViewModel, type ChatMetricsViewModel } from '@/lib/types/chat';
 
 import { ChatInput } from './chat-input';
@@ -45,6 +47,34 @@ export interface ChatProps {
   initialMessages?: MessageWithHistory[];
   initialState?: ConversationStateModel;
   initialPromptData?: PromptBootstrapData;
+}
+
+const PENDING_SUBMIT_TTL_MS = 30_000;
+
+const PENDING_SUBMIT_TOASTS = {
+  storageUnavailable: {
+    level: 'warning',
+    message: 'Browser storage is unavailable. Sending without changing the URL.',
+  },
+  restoreFailed: {
+    level: 'error',
+    message: 'Failed to restore your pending message. Please send again.',
+  },
+  expired: {
+    level: 'warning',
+    message: 'Your pending message expired. Please send again.',
+  },
+} as const;
+
+type PendingSubmitToastKey = keyof typeof PENDING_SUBMIT_TOASTS;
+
+function notifyPendingSubmit(key: PendingSubmitToastKey) {
+  const toastSpec = PENDING_SUBMIT_TOASTS[key];
+  if (toastSpec.level === 'error') {
+    toast.error(toastSpec.message);
+    return;
+  }
+  toast.warning(toastSpec.message);
 }
 
 function serializeFormData(formData: FormData): Record<string, string> {
@@ -116,18 +146,15 @@ export function Chat({
     submitAction: rawSubmitAction,
     isPending,
     retry,
-  } = useChat(
-    buildRequestBody,
-    {
-      api: '/api/chat',
-      stream: cfg.stream,
-      conversationId,
-      initialMessages: mappedInitialMessages,
-      onConversationCreated: conv => {
-        upsert(conv);
-      },
+  } = useChat(buildRequestBody, {
+    api: '/api/chat',
+    stream: cfg.stream,
+    conversationId,
+    initialMessages: mappedInitialMessages,
+    onConversationCreated: conv => {
+      upsert(conv);
     },
-  );
+  });
 
   const replayedPendingSubmitRef = useRef(false);
   useEffect(() => {
@@ -138,21 +165,23 @@ export function Chat({
     if (replayedPendingSubmitRef.current) return;
     if (typeof window === 'undefined') return;
 
-    const key = `talkie.pendingSubmit:${conversationId}`;
-    const raw = window.sessionStorage.getItem(key);
-    if (!raw) return;
+    const result = takePendingSubmit(conversationId, { ttlMs: PENDING_SUBMIT_TTL_MS });
+    if (result.status === 'none') return;
 
     replayedPendingSubmitRef.current = true;
-    window.sessionStorage.removeItem(key);
 
-    try {
-      const payload = JSON.parse(raw) as Record<string, string>;
-      startTransition(() => {
-        rawSubmitAction(buildFormData(payload));
-      });
-    } catch {
-      // ignore malformed payloads
+    if (result.status === 'expired') {
+      notifyPendingSubmit('expired');
+      return;
     }
+    if (result.status === 'invalid') {
+      notifyPendingSubmit('restoreFailed');
+      return;
+    }
+
+    startTransition(() => {
+      rawSubmitAction(buildFormData(result.values));
+    });
   }, [conversationId, rawSubmitAction]);
 
   const submitAction = useCallback(
@@ -168,12 +197,9 @@ export function Chat({
           pathname !== `/chat/${conversationId}`);
 
       if (shouldNavigateToConversation) {
-        try {
-          window.sessionStorage.setItem(
-            `talkie.pendingSubmit:${conversationId}`,
-            JSON.stringify(serializeFormData(formData)),
-          );
-        } catch {
+        const saveResult = savePendingSubmit(conversationId, serializeFormData(formData));
+        if (!saveResult.ok) {
+          notifyPendingSubmit('storageUnavailable');
           // If storage fails, fall back to sending without navigation.
           rawSubmitAction(formData);
           return;
