@@ -5,7 +5,7 @@ import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
 import { getModels } from '@/app/(chat)/chat/actions';
-import { type RenderableMessage } from '@/components/chat';
+import { type PromptBootstrapData, type RenderableMessage } from '@/components/chat';
 import MessageMetricsSection from '@/components/chat/inspectors/message-metrics-section';
 import ModelConfigSection from '@/components/chat/inspectors/model-config-section';
 import ReasoningConfigSection from '@/components/chat/inspectors/reasoning-config-section';
@@ -17,31 +17,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 import type { ConversationStateModel } from '@/generated/prisma/models/ConversationState';
 import type { LLMModelInfo } from '@/lib/ai/llm/model-registry';
-import type { PromptListItem } from '@/lib/repositories/prompt-repository';
 
 interface ChatInspectorProps {
   messages: RenderableMessage[];
   selectedMessageId: string | null;
   initialState?: ConversationStateModel;
-  initialPromptData?: {
-    metadata: {
-      id: string;
-      name: string;
-      key: string;
-      description: string;
-      tags: string[];
-      latestVersion: {
-        id: string;
-        version: number;
-        alias: string;
-        content: string;
-        note: string;
-        responseExample: string;
-        createdAt: Date;
-      };
-    };
-    prompts: PromptListItem[];
-  };
+  initialPromptData?: PromptBootstrapData;
 }
 
 export function useModelsQuery() {

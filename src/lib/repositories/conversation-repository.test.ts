@@ -223,7 +223,7 @@ describe('listMessagesByConversationId', () => {
         id: 'call_1',
         functionCallId: 'fc_1',
         name: 'calculator',
-        status: 'succeeded',
+        status: 'completed',
         args: { expression: '1+1' },
         resultPreview: { value: 2 },
       },

@@ -1,5 +1,6 @@
 'use client';
-import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useArtifactContext } from '@/components/artifact-provider';
 import ChatConversation from '@/components/chat-conversation';
@@ -16,11 +17,6 @@ import {
 } from '@/hooks/use-chat-scroll';
 // import { useConversationsQuery } from '@/hooks/use-conversations-query';
 import { useConversationsQuery } from '@/hooks/use-conversations-query';
-import {
-  type getPromptMetadata,
-  type listPromptsByMetadataId,
-  type PromptListItem,
-} from '@/lib/repositories/prompt-repository';
 import { toChatMetricsViewModel, type ChatMetricsViewModel } from '@/lib/types/chat';
 
 import { ChatInput } from './chat-input';
@@ -28,6 +24,10 @@ import { ChatInput } from './chat-input';
 import type { ChatMessageProps } from '@/components/chat-message';
 import type { Message, MessageMetrics } from '@/generated/prisma/client';
 import type { ToolRunSnapshot } from '@/lib/ai/llm/types';
+import type {
+  PromptListItem,
+  PromptMetadataWithLatestVersion,
+} from '@/lib/repositories/prompt-repository';
 
 export type MessageWithHistory = Message & {
   MessageMetrics?: MessageMetrics[];
@@ -35,29 +35,34 @@ export type MessageWithHistory = Message & {
 };
 export type RenderableMessage = ChatMessageProps | MessageWithHistory;
 
+export interface PromptBootstrapData {
+  metadata: PromptMetadataWithLatestVersion | null;
+  prompts: PromptListItem[];
+}
+
 export interface ChatProps {
   conversationId: string;
   initialMessages?: MessageWithHistory[];
   initialState?: ConversationStateModel;
-  initialPromptData?: {
-    metadata: {
-      id: string;
-      name: string;
-      key: string;
-      description: string;
-      tags: string[];
-      latestVersion: {
-        id: string;
-        version: number;
-        alias: string;
-        content: string;
-        note: string;
-        responseExample: string;
-        createdAt: Date;
-      };
-    };
-    prompts: PromptListItem[];
-  };
+  initialPromptData?: PromptBootstrapData;
+}
+
+function serializeFormData(formData: FormData): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of formData.entries()) {
+    if (typeof value === 'string') {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function buildFormData(values: Record<string, string>): FormData {
+  const formData = new FormData();
+  for (const [key, value] of Object.entries(values)) {
+    formData.append(key, value);
+  }
+  return formData;
 }
 
 export function Chat({
@@ -66,6 +71,8 @@ export function Chat({
   initialState,
   initialPromptData,
 }: ChatProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const cfg = useInferenceConfig();
   const { artifact } = useArtifactContext();
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(() => {
@@ -102,7 +109,14 @@ export function Chat({
 
   const buildRequestBody = useChatRequestBuilder(conversationId, cfg);
 
-  const { messages, isStreaming, error, submitAction, isPending, retry } = useChat(
+  const {
+    messages,
+    isStreaming,
+    error,
+    submitAction: rawSubmitAction,
+    isPending,
+    retry,
+  } = useChat(
     buildRequestBody,
     {
       api: '/api/chat',
@@ -110,10 +124,70 @@ export function Chat({
       conversationId,
       initialMessages: mappedInitialMessages,
       onConversationCreated: conv => {
-        window.history.replaceState({}, '', `/chat/${conv.id}`);
         upsert(conv);
       },
     },
+  );
+
+  const replayedPendingSubmitRef = useRef(false);
+  useEffect(() => {
+    replayedPendingSubmitRef.current = false;
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (replayedPendingSubmitRef.current) return;
+    if (typeof window === 'undefined') return;
+
+    const key = `talkie.pendingSubmit:${conversationId}`;
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return;
+
+    replayedPendingSubmitRef.current = true;
+    window.sessionStorage.removeItem(key);
+
+    try {
+      const payload = JSON.parse(raw) as Record<string, string>;
+      startTransition(() => {
+        rawSubmitAction(buildFormData(payload));
+      });
+    } catch {
+      // ignore malformed payloads
+    }
+  }, [conversationId, rawSubmitAction]);
+
+  const submitAction = useCallback(
+    (formData: FormData) => {
+      // If we're on `/` (or `/chat`), move to `/chat/:id` before streaming starts.
+      // This keeps the homepage URL clean until the user actually uses chat,
+      // and avoids mid-stream router navigation which can interrupt streaming.
+      const shouldNavigateToConversation =
+        pathname === '/' ||
+        pathname === '/chat' ||
+        (typeof pathname === 'string' &&
+          !pathname.startsWith('/chat/') &&
+          pathname !== `/chat/${conversationId}`);
+
+      if (shouldNavigateToConversation) {
+        try {
+          window.sessionStorage.setItem(
+            `talkie.pendingSubmit:${conversationId}`,
+            JSON.stringify(serializeFormData(formData)),
+          );
+        } catch {
+          // If storage fails, fall back to sending without navigation.
+          rawSubmitAction(formData);
+          return;
+        }
+
+        startTransition(() => {
+          router.replace(`/chat/${conversationId}`, { scroll: false });
+        });
+        return;
+      }
+
+      rawSubmitAction(formData);
+    },
+    [conversationId, pathname, rawSubmitAction, router],
   );
 
   useSelectLatestAssistantMessage(messages, setSelectedMessageId);

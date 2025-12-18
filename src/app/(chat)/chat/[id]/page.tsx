@@ -1,6 +1,4 @@
-import NotFound from 'next/dist/client/components/builtin/not-found';
-import { redirect } from 'next/navigation';
-import React from 'react';
+import { notFound, redirect } from 'next/navigation';
 
 import { auth } from '@/app/(auth)/auth';
 import { ArtifactProvider } from '@/components/artifact-provider';
@@ -23,28 +21,45 @@ export default async function ChatPage(props: { params: Promise<{ id: string }> 
   }
 
   const chat = await findConversationById(id);
-  const isYourChat = chat?.userId != null && session?.user?.id === chat.userId;
-  if (!chat || !isYourChat) {
-    return NotFound;
-  }
-  const messages = await listMessagesByConversationId(id);
-  const state = await findConversationStateByConversationId(id);
-  let promptMetadata = undefined;
-  if (state && state.promptMetadataId) {
-    const prompts = await listPromptsByMetadataId(state.promptMetadataId);
-    promptMetadata = { prompts: prompts };
+  if (chat) {
+    const isYourChat = chat.userId != null && session?.user?.id === chat.userId;
+    if (!isYourChat) {
+      notFound();
+    }
+
+    const messages = await listMessagesByConversationId(id);
+    const state = await findConversationStateByConversationId(id);
+    let promptMetadata = undefined;
+    if (state && state.promptMetadataId) {
+      const [metadata, prompts] = await Promise.all([
+        getPromptMetadata(state.promptMetadataId),
+        listPromptsByMetadataId(state.promptMetadataId),
+      ]);
+      promptMetadata = { metadata, prompts };
+    }
+
+    return (
+      <>
+        <ArtifactProvider>
+          <InferenceConfigProvider>
+            <Chat
+              conversationId={id}
+              initialMessages={messages}
+              initialState={state}
+              initialPromptData={promptMetadata}
+            />
+          </InferenceConfigProvider>
+        </ArtifactProvider>
+      </>
+    );
   }
 
+  // Draft conversation: allow loading /chat/:id even before the first message persists a Conversation row.
   return (
     <>
       <ArtifactProvider>
         <InferenceConfigProvider>
-          <Chat
-            conversationId={id}
-            initialMessages={messages}
-            initialState={state}
-            initialPromptData={promptMetadata}
-          />
+          <Chat conversationId={id} />
         </InferenceConfigProvider>
       </ArtifactProvider>
     </>
