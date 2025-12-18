@@ -10,6 +10,7 @@ import {
   type LLMTokenUsage,
   type ResponsesCreateParams,
   type FunctionToolCall,
+  type ToolRunSnapshot,
 } from '@/lib/ai/llm/types';
 import {
   createConversation,
@@ -168,7 +169,24 @@ export async function POST(req: NextRequest) {
         const startedAt = Date.now();
         let firstTokenAt: number | null = null;
         let lastTokenAt: number | null = null;
-        const toolCalls = [];
+        // Keep the latest aggregated snapshot per tool call id (call_...).
+        const toolCallsById = new Map<string, ToolRunSnapshot>();
+
+        const upsertToolRun = (next: ToolRunSnapshot) => {
+          if (!next?.id) return;
+          const prev = toolCallsById.get(next.id);
+          toolCallsById.set(next.id, {
+            ...(prev ?? {}),
+            ...next,
+            // If a field is omitted in a later snapshot, keep the earlier value.
+            args: next.args ?? prev?.args,
+            resultPreview: next.resultPreview ?? prev?.resultPreview,
+            status: next.status ?? prev?.status,
+            // `functionCallId` is expected to be injected; still keep previous as a fallback.
+            functionCallId: next.functionCallId ?? prev?.functionCallId,
+          } as ToolRunSnapshot);
+        };
+
         const safeParseArguments = (value: unknown) => {
           if (typeof value !== 'string') return value as unknown;
           try {
@@ -203,7 +221,29 @@ export async function POST(req: NextRequest) {
                 LLMStreamEvent,
                 { type: typeof LLMStreamEventType.FunctionCall }
               >;
-              toolCalls.push(functionCall.item);
+              console.debug('function_call: ', functionCall);
+
+              // Seed tool run snapshot using the stable call id (call_...) and the provider item id (fc_...).
+              const item = functionCall.item as FunctionToolCall | undefined;
+              if (item?.callId) {
+                upsertToolRun({
+                  id: item.callId,
+                  functionCallId: item.id,
+                  name: item.name,
+                  status: 'pending',
+                  args: safeParseArguments(item.arguments),
+                } as ToolRunSnapshot);
+              }
+            }
+
+            if (type === 'using_tool') {
+              const usingTool = chunk as Extract<
+                LLMStreamEvent,
+                { type: typeof LLMStreamEventType.UsingTool }
+              >;
+              // `using_tool` may emit multiple snapshots for the same tool call; merge into the existing snapshot.
+              upsertToolRun(usingTool.item as ToolRunSnapshot);
+              console.debug('using_tool: ', usingTool);
             }
 
             if (type === 'complete') {
@@ -248,6 +288,7 @@ export async function POST(req: NextRequest) {
               // Attach messageMetrics only on complete events
               outChunk = {
                 ...completeChunk,
+                toolCalls: Array.from(toolCallsById.values()),
                 messageMetrics: {
                   role: 'assistant',
                   model: llmPayload.model ?? null,
@@ -297,20 +338,21 @@ export async function POST(req: NextRequest) {
             mode: llmPayload.mode,
           });
 
-          if (toolCalls.length > 0) {
-            await Promise.all(
-              toolCalls.map((toolCall: FunctionToolCall) =>
-                upsertToolCall({
-                  messageId: assistantMessage.id,
-                  toolCallId: toolCall.id,
-                  toolName: toolCall.name,
-                  callId: toolCall.callId ?? null,
-                  arguments: safeParseArguments(toolCall.arguments),
-                  result: null,
-                  status: toolCall.status ?? null,
-                }),
-              ),
-            );
+          if (toolCallsById.size > 0) {
+            // Persist deterministically (no Promise.all) to avoid last-write-wins races.
+            for (const toolUsing of toolCallsById.values()) {
+              await upsertToolCall({
+                messageId: assistantMessage.id,
+                toolName: toolUsing.name,
+                // Repository upsert key is (messageId, callId=call_...).
+                callId: toolUsing.id ?? null,
+                // Provider function_call item id (fc_...) is optional metadata.
+                toolCallId: toolUsing.functionCallId ?? null,
+                arguments: safeParseArguments(toolUsing.args),
+                result: safeParseArguments(toolUsing.resultPreview),
+                status: toolUsing.status ?? null,
+              });
+            }
           }
 
           await upsertMessageMetrics({

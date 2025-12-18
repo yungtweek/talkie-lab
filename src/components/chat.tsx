@@ -27,13 +27,17 @@ import { ChatInput } from './chat-input';
 
 import type { ChatMessageProps } from '@/components/chat-message';
 import type { Message, MessageMetrics } from '@/generated/prisma/client';
+import type { ToolRunSnapshot } from '@/lib/ai/llm/types';
 
-export type MessageWithMetrics = Message & { MessageMetrics?: MessageMetrics[] };
-export type RenderableMessage = ChatMessageProps | MessageWithMetrics;
+export type MessageWithHistory = Message & {
+  MessageMetrics?: MessageMetrics[];
+  toolCalls?: ToolRunSnapshot[];
+};
+export type RenderableMessage = ChatMessageProps | MessageWithHistory;
 
 export interface ChatProps {
   conversationId: string;
-  initialMessages?: MessageWithMetrics[];
+  initialMessages?: MessageWithHistory[];
   initialState?: ConversationStateModel;
   initialPromptData?: {
     metadata: {
@@ -89,6 +93,7 @@ export function Chat({
           role: msg.role as ChatMessage['role'],
           content: msg.content,
           type: 'text',
+          toolCalls: msg.toolCalls,
           messageMetrics: mappedMetrics ? [mappedMetrics] : undefined,
         };
       }),

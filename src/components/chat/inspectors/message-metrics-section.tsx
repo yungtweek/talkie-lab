@@ -19,7 +19,7 @@ function extractMetricsFromMessage(message: RenderableMessage): ChatMetricsViewM
       : message.messageMetrics;
   }
 
-  // MessageWithMetrics 케이스
+  // MessageWithHistory 케이스
   if ('MessageMetrics' in message && message.MessageMetrics && message.MessageMetrics.length > 0) {
     const base = message.MessageMetrics[0];
     return base

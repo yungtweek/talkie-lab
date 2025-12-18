@@ -23,8 +23,7 @@ registerTool({
       return {
         ok: true,
         data: {
-          tag,
-          results: items,
+          items,
         },
       };
     } catch (e) {

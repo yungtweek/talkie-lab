@@ -14,6 +14,7 @@ import {
 interface ToolCall {
   name: AgentToolName;
   callId: string;
+  functionCallId?: string;
   args: Record<string, unknown>;
 }
 
@@ -52,7 +53,6 @@ export async function* runAgentChatLoop(
       }
       if (raw.type === LLMStreamEventType.FunctionCall) {
         const fc = raw.item;
-        console.log('[Agent] Function call:', raw);
         let parsedArgs: Record<string, unknown> = {};
         if (fc.arguments.trim()) {
           try {
@@ -69,6 +69,7 @@ export async function* runAgentChatLoop(
             item: {
               name: fc.name,
               id: fc.callId,
+              functionCallId: fc.id,
               args: parsedArgs ?? {},
               status: 'pending',
             },
@@ -86,16 +87,11 @@ export async function* runAgentChatLoop(
       yield ev;
     }
 
-    console.log('[Agent] Tool calls this hop:', toolCallsThisHop);
-
     if (toolCallsThisHop.length === 0) {
       break;
     }
 
     for (const call of toolCallsThisHop) {
-      console.log('[Agent] Executing tool:', call.name, call.args);
-      console.log('[Agent] call: ', call);
-
       let result!: AgentToolResult;
       try {
         result = await runAgentTool(call.name, call.args);
@@ -118,9 +114,10 @@ export async function* runAgentChatLoop(
           type: LLMStreamEventType.UsingTool,
           item: {
             id: call.callId,
+            functionCallId: call.functionCallId,
             name: call.name,
             args: call.args,
-            status: 'succeeded',
+            status: 'completed',
             resultPreview: result.data,
           },
         };

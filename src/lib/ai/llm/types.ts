@@ -77,11 +77,12 @@ export type ModelString = `${ProviderKey}:${string}` | string;
 
 export type InputItem = InputMessage | FunctionToolCall | FunctionToolCallOutput | Reasoning;
 
-export type ToolRunStatus = 'pending' | 'running' | 'succeeded' | 'failed';
+export type ToolRunStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export interface ToolRunSnapshot {
   /** Unique identifier for a single tool execution (e.g. function_call id). */
   id: string;
+  functionCallId?: string;
   /** Tool name (should match the function/tool name from the model). */
   name: string;
   /** High-level status for this tool execution within a single response. */
@@ -247,6 +248,7 @@ export type LLMStreamEvent =
       topP?: number;
       temperature?: number | null;
       usage?: LLMTokenUsage;
+      toolCalls?: ToolRunSnapshot[];
       messageMetrics?: ChatMetricsViewModel;
     }
   | {

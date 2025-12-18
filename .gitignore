@@ -15,6 +15,7 @@ build/
 dist/
 .cache/
 .nyc_output/
+.run/
 
 # Tests / coverage
 coverage/

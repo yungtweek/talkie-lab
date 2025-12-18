@@ -16,7 +16,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }));
 
-import { type Message, type MessageMetrics } from '@/generated/prisma/client';
+import { type Message, type MessageMetrics, type ToolCall } from '@/generated/prisma/client';
 
 import { listMessagesByConversationId, upsertMessageMetrics } from './conversation-repository';
 
@@ -137,6 +137,7 @@ describe('listMessagesByConversationId', () => {
       promptTokens: 1,
       completionTokens: 2,
       totalTokens: 3,
+      toolCalls: [],
       MessageMetrics: [
         {
           id: 'metric1',
@@ -145,7 +146,7 @@ describe('listMessagesByConversationId', () => {
           totalTokens: 30,
         } as MessageMetrics,
       ],
-    } as unknown as Message & { MessageMetrics: MessageMetrics[] };
+    } as unknown as Message & { MessageMetrics: MessageMetrics[]; toolCalls: ToolCall[] };
 
     mocks.findManyMock.mockResolvedValue([message]);
 
@@ -153,7 +154,10 @@ describe('listMessagesByConversationId', () => {
     expect(mocks.findManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { conversationId: 'c1' },
-        include: { MessageMetrics: { orderBy: [{ createdAt: 'desc' }] } },
+        include: {
+          MessageMetrics: { orderBy: [{ createdAt: 'desc' }] },
+          toolCalls: { orderBy: [{ createdAt: 'asc' }] },
+        },
       }),
     );
     expect(result[0].promptTokens).toBe(10);
@@ -172,8 +176,9 @@ describe('listMessagesByConversationId', () => {
       promptTokens: 5,
       completionTokens: 6,
       totalTokens: 11,
+      toolCalls: [],
       MessageMetrics: [],
-    } as unknown as Message & { MessageMetrics: MessageMetrics[] };
+    } as unknown as Message & { MessageMetrics: MessageMetrics[]; toolCalls: ToolCall[] };
 
     mocks.findManyMock.mockResolvedValue([message]);
 
@@ -181,5 +186,47 @@ describe('listMessagesByConversationId', () => {
     expect(result[0].promptTokens).toBe(5);
     expect(result[0].completionTokens).toBe(6);
     expect(result[0].totalTokens).toBe(11);
+  });
+
+  it('maps toolCalls history into ToolRunSnapshot toolCalls', async () => {
+    const message = {
+      id: 'm3',
+      position: BigInt(3),
+      conversationId: 'c1',
+      role: 'assistant',
+      content: 'tools',
+      createdAt: new Date(),
+      promptTokens: null,
+      completionTokens: null,
+      totalTokens: null,
+      toolCalls: [
+        {
+          id: 'tc1',
+          messageId: 'm3',
+          toolCallId: 'fc_1',
+          toolName: 'calculator',
+          callId: 'call_1',
+          arguments: { expression: '1+1' },
+          result: { value: 2 },
+          status: 'succeeded',
+          createdAt: new Date(),
+        } as unknown as ToolCall,
+      ],
+      MessageMetrics: [],
+    } as unknown as Message & { MessageMetrics: MessageMetrics[]; toolCalls: ToolCall[] };
+
+    mocks.findManyMock.mockResolvedValue([message]);
+
+    const result = await listMessagesByConversationId('c1');
+    expect(result[0].toolCalls).toEqual([
+      {
+        id: 'call_1',
+        functionCallId: 'fc_1',
+        name: 'calculator',
+        status: 'succeeded',
+        args: { expression: '1+1' },
+        resultPreview: { value: 2 },
+      },
+    ]);
   });
 });

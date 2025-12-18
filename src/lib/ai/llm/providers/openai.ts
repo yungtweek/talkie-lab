@@ -41,11 +41,16 @@ type OpenAIFunctionToolCall = Omit<FunctionToolCall, 'callId'> & { call_id: stri
 type OpenAIFunctionToolCallOutput = Omit<FunctionToolCallOutput, 'callId'> & { call_id: string };
 type OpenAIReasoning = Omit<Reasoning, 'encryptedContent'> & { encrypted_content?: string };
 
+interface OpenAIInputMessage {
+  role: InputMessage['role'];
+  content: InputMessage['content'];
+}
+
 type OpenAIInputItem =
-  | InputMessage
-  | OpenAIFunctionToolCall
-  | OpenAIFunctionToolCallOutput
-  | OpenAIReasoning;
+  | OpenAIInputMessage
+  | (Omit<OpenAIFunctionToolCall, 'status' | 'id'> & { status?: never; id?: never })
+  | (Omit<OpenAIFunctionToolCallOutput, 'status' | 'id'> & { status?: never; id?: never })
+  | (Omit<OpenAIReasoning, 'status' | 'id'> & { status?: never; id?: never });
 
 type OpenAIResponsesPayload = Omit<
   ResponsesCreateParams,
@@ -61,29 +66,125 @@ type OpenAIResponsesPayload = Omit<
 type StreamPayload = OpenAIResponsesPayload & { stream: true };
 type NonStreamPayload = OpenAIResponsesPayload & { stream?: false | undefined };
 
-function toOpenAIInputItem(item: InputItem): OpenAIInputItem {
-  if (item.type === 'function_call') {
-    const { callId, ...rest } = item;
+function shouldLogOpenAIPayload(): boolean {
+  const raw = process.env.LLM_DEBUG_PAYLOAD ?? process.env.DEBUG_LLM_PAYLOAD ?? '';
+  return raw === '1' || raw.toLowerCase() === 'true';
+}
+
+function truncateForLog(value: string, maxLen: number): string {
+  if (value.length <= maxLen) return value;
+  return `${value.slice(0, maxLen)}…`;
+}
+
+type OpenAIInputItemLogSummary = Record<string, unknown>;
+
+function summarizeOpenAIInputItemForLogs(item: OpenAIInputItem): OpenAIInputItemLogSummary {
+  const keys = Object.keys(item).sort();
+  if ('type' in item && item.type === 'function_call') {
+    const args = typeof item.arguments === 'string' ? item.arguments : '';
     return {
-      ...rest,
+      type: 'function_call',
+      keys,
+      name: item.name,
+      call_id: (item as { call_id?: unknown }).call_id,
+      argumentsLen: args.length,
+      argumentsPreview: truncateForLog(args, 120),
+    };
+  }
+  if ('type' in item && item.type === 'function_call_output') {
+    const output =
+      typeof item.output === 'string'
+        ? item.output
+        : Array.isArray(item.output)
+          ? item.output.join('\n')
+          : '';
+    return {
+      type: 'function_call_output',
+      keys,
+      call_id: (item as { call_id?: unknown }).call_id,
+      outputLen: output.length,
+      outputPreview: truncateForLog(output, 120),
+    };
+  }
+  if ('type' in item && item.type === 'reasoning') {
+    return {
+      type: 'reasoning',
+      keys,
+      summaryCount: Array.isArray(item.summary) ? item.summary.length : 0,
+      contentCount: Array.isArray(item.content) ? item.content.length : 0,
+      hasEncryptedContent:
+        typeof (item as { encrypted_content?: unknown }).encrypted_content === 'string',
+    };
+  }
+
+  // message-like item (role/content)
+  const content = typeof (item as { content?: unknown }).content === 'string' ? item.content : '';
+  return {
+    type: 'message',
+    keys,
+    role: (item as { role?: unknown }).role,
+    contentLen: content.length,
+    contentPreview: truncateForLog(content, 120),
+  };
+}
+
+function summarizeOpenAIResponsesPayloadForLogs(
+  payload: StreamPayload | NonStreamPayload,
+): Record<string, unknown> {
+  return {
+    model: payload.model,
+    stream: payload.stream,
+    tool_choice: payload.tool_choice,
+    top_p: payload.top_p,
+    max_output_tokens: payload.max_output_tokens,
+    metadataKeys: payload.metadata ? Object.keys(payload.metadata).sort() : [],
+    tools: Array.isArray(payload.tools)
+      ? payload.tools.map(tool => {
+          if (!tool || typeof tool !== 'object') return 'unknown';
+          if (tool.type === 'function') return tool.name;
+          if (tool.type === 'web_search') return 'web_search';
+          return 'unknown';
+        })
+      : [],
+    inputCount: Array.isArray(payload.input) ? payload.input.length : 0,
+    input: Array.isArray(payload.input) ? payload.input.map(summarizeOpenAIInputItemForLogs) : [],
+  };
+}
+
+function toOpenAIInputItem(item: InputItem): OpenAIInputItem {
+  // OpenAI Responses API input items do not accept `status` fields.
+  // We keep `status` in our internal types for response parsing and UI state,
+  // but must strip it when sending requests.
+  if (item.type === 'function_call') {
+    const { callId, arguments: args, name } = item;
+    return {
+      type: 'function_call',
+      arguments: args,
+      name,
       call_id: callId,
     };
   }
   if (item.type === 'function_call_output') {
-    const { callId, ...rest } = item;
+    const { callId, output } = item;
     return {
-      ...rest,
+      type: 'function_call_output',
+      output,
       call_id: callId,
     };
   }
   if (item.type === 'reasoning') {
-    const { encryptedContent, ...rest } = item;
+    const { encryptedContent, summary, content } = item;
     return {
-      ...rest,
+      type: 'reasoning',
+      summary,
+      ...(content ? { content } : {}),
       ...(encryptedContent ? { encrypted_content: encryptedContent } : {}),
     };
   }
-  return item;
+  return {
+    role: item.role,
+    content: item.content,
+  };
 }
 
 // NOTE:
@@ -595,6 +696,13 @@ export async function* streamOpenAIResponses(
   const { baseUrl, apiKey, provider } = config;
   const url = `${normalizeBaseUrl(baseUrl)}/v1/responses`;
 
+  const payloadLog = shouldLogOpenAIPayload()
+    ? summarizeOpenAIResponsesPayloadForLogs(payload)
+    : null;
+  if (payloadLog) {
+    console.log('[OpenAI] /v1/responses payload (sanitized):', JSON.stringify(payloadLog));
+  }
+
   let upstreamRes: Response;
 
   try {
@@ -617,6 +725,9 @@ export async function* streamOpenAIResponses(
     console.error(
       `[OpenAI] Error response from upstream:  ${upstreamRes.status} ${upstreamRes.statusText}`,
     );
+    if (payloadLog) {
+      console.error('[OpenAI] Upstream error payload (sanitized):', JSON.stringify(payloadLog));
+    }
 
     yield {
       type: LLMStreamEventType.Error,
@@ -685,6 +796,13 @@ export async function textOpenAIResponses(
   const { baseUrl, apiKey, provider } = config;
   const url = `${normalizeBaseUrl(baseUrl)}/v1/responses`;
 
+  const payloadLog = shouldLogOpenAIPayload()
+    ? summarizeOpenAIResponsesPayloadForLogs(payload)
+    : null;
+  if (payloadLog) {
+    console.log('[OpenAI] /v1/responses payload (sanitized):', JSON.stringify(payloadLog));
+  }
+
   let res: Response;
   try {
     res = await fetch(url, {
@@ -700,6 +818,9 @@ export async function textOpenAIResponses(
 
   if (!res.ok) {
     const text = await safeReadText(res);
+    if (payloadLog) {
+      console.error('[OpenAI] Upstream error payload (sanitized):', JSON.stringify(payloadLog));
+    }
     throw new Error(text ?? `Upstream error while fetching responses: ${res.status}`);
   }
 
