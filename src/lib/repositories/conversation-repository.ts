@@ -7,6 +7,41 @@ import {
 } from '@/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 
+import type { ToolRunSnapshot, ToolRunStatus } from '@/lib/ai/llm/types';
+
+function normalizeToolRunStatus(status: string | null | undefined): ToolRunStatus {
+  switch (status) {
+    case 'pending':
+      return 'pending';
+    case 'running':
+    case 'in_progress':
+      return 'running';
+    case 'succeeded':
+    case 'success':
+    case 'completed':
+      return 'completed';
+    case 'failed':
+    case 'error':
+      return 'failed';
+    default:
+      // Older rows may not have a status; if there's a result, assume completion.
+      return 'completed';
+  }
+}
+
+function mapToolCallsToToolRunSnapshots(toolCalls: ToolCall[] | undefined): ToolRunSnapshot[] {
+  if (!toolCalls || toolCalls.length === 0) return [];
+
+  return toolCalls.map(call => ({
+    id: call.callId ?? call.toolCallId ?? call.id,
+    functionCallId: call.toolCallId ?? undefined,
+    name: call.toolName,
+    status: normalizeToolRunStatus(call.status),
+    args: call.arguments ?? undefined,
+    resultPreview: call.result ?? undefined,
+  }));
+}
+
 export async function findConversationById(id: string) {
   return prisma.conversation.findUnique({
     where: {
@@ -124,7 +159,14 @@ export async function createMessage(input: CreateMessageInput) {
 export async function listMessagesByConversationId(
   conversationId: string,
   opts?: { take?: number },
-): Promise<Array<Message & { MessageMetrics?: MessageMetrics[] }>> {
+): Promise<
+  Array<
+    Message & {
+      MessageMetrics?: MessageMetrics[];
+      toolCalls?: ToolRunSnapshot[];
+    }
+  >
+> {
   const take = opts?.take;
   const messages = await prisma.message.findMany({
     where: { conversationId },
@@ -134,15 +176,26 @@ export async function listMessagesByConversationId(
       MessageMetrics: {
         orderBy: [{ createdAt: 'desc' }],
       },
+      toolCalls: {
+        orderBy: [{ createdAt: 'asc' }],
+      },
     },
   });
 
   return messages.map(msg => {
     const metrics = msg.MessageMetrics?.[0];
-    if (!metrics) return msg;
+    const toolCalls = mapToolCallsToToolRunSnapshots(msg.toolCalls);
+
+    if (!metrics) {
+      return {
+        ...msg,
+        toolCalls,
+      };
+    }
 
     return {
       ...msg,
+      toolCalls,
       promptTokens: metrics.promptTokens ?? msg.promptTokens,
       completionTokens: metrics.completionTokens ?? msg.completionTokens,
       totalTokens: metrics.totalTokens ?? msg.totalTokens,
@@ -301,7 +354,6 @@ export async function upsertToolCall(input: UpsertToolCallInput) {
     where: {
       messageId,
       callId: callId ?? null,
-      toolCallId: toolCallId ?? null,
     },
     orderBy: {
       createdAt: 'desc',

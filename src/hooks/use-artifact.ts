@@ -1,6 +1,6 @@
 import { type Dispatch, type SetStateAction, useMemo, useState } from 'react';
 
-export type ToolRunStatus = 'pending' | 'running' | 'succeeded' | 'failed';
+export type ToolRunStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export interface ToolRun {
   /** Unique identifier for a single tool execution (e.g. function_call id). */

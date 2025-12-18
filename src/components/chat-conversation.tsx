@@ -47,6 +47,7 @@ export default function ChatConversation({
             id={props.id}
             role={props.role}
             content={props.content}
+            toolCalls={props.toolCalls}
             logs={props.logs}
             selectedMessageId={selectedMessageId}
             setSelectedMessageId={setSelectedMessageId}
@@ -61,7 +62,7 @@ export default function ChatConversation({
             {error.statusCode ?? ''} {error.type}
           </AlertTitle>
           <AlertDescription>
-            <p className="font-mono text-xs whitespace-pre-wrap break-words">{error.message}</p>
+            <p className="font-mono text-xs whitespace-pre-wrap wrap-break-word">{error.message}</p>
           </AlertDescription>
         </Alert>
       )}
@@ -72,7 +73,7 @@ export default function ChatConversation({
       )}
       <div data-observer-anchor className="h-px w-full" />
 
-      <div data-scroll-sentinel className="min-h-[24px] min-w-[24px] shrink-0" />
+      <div data-scroll-sentinel className="min-h-6 min-w-6 shrink-0" />
     </div>
   );
 }

@@ -42,6 +42,7 @@ export interface ChatMessage {
   /**
    * Raw metrics data (aligned with listMessagesByConversationId).
    */
+  toolCalls?: ToolRunSnapshot[];
   messageMetrics?: ChatMetricsViewModel[];
   logs?: ArtifactLog[];
 }
@@ -84,7 +85,7 @@ type ChatEvent = LLMStreamEvent | ConversationCreatedEvent | AssistantMessageCre
 const upsertToolRun = (prev: UIArtifact, snapshot: ToolRunSnapshot): UIArtifact['toolRuns'] => {
   const now = Date.now();
   const existing = prev.toolRuns.find(run => run.id === snapshot.id);
-  const isTerminal = snapshot.status === 'succeeded' || snapshot.status === 'failed';
+  const isTerminal = snapshot.status === 'completed' || snapshot.status === 'failed';
 
   if (!existing) {
     return [
@@ -199,6 +200,7 @@ const createStreamEventHandler = (ctx: StreamHandlerContext) => {
           content: finalText,
           type: 'text',
           messageMetrics,
+          toolCalls: evt.toolCalls,
           logs: [...(artifactRef.current.logs ?? [])],
         });
 
