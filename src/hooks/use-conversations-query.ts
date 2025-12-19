@@ -12,7 +12,7 @@ import { type ListConversationsByUserResult } from '@/lib/repositories/conversat
 export type ConversationItem = ListConversationsByUserResult['items'][number];
 
 /**
- * Shared conversation list query + client-side cache helpers.
+ * Shared conversation list query and client-side cache helpers.
  * Keeps pagination data (loadMore) intact across routes thanks to persisted queries.
  */
 export function useConversationsQuery() {
@@ -111,6 +111,11 @@ export function useConversationsQuery() {
 
   const remove = useCallback(
     (id: string) => {
+      const before = queryClient.getQueryData<ListConversationsByUserResult | undefined>([
+        'conversations',
+      ]);
+      const wasLastVisible = before?.items.length === 1;
+
       queryClient.setQueryData<ListConversationsByUserResult | undefined>(
         ['conversations'],
         prev => {
@@ -118,9 +123,7 @@ export function useConversationsQuery() {
 
           const nextItems = prev.items.filter(item => item.id !== id);
           const removedCursor = prev.nextCursor === id;
-          const nextCursor = removedCursor
-            ? nextItems[nextItems.length - 1]?.id
-            : prev.nextCursor;
+          const nextCursor = removedCursor ? nextItems[nextItems.length - 1]?.id : prev.nextCursor;
 
           return {
             ...prev,
@@ -129,6 +132,11 @@ export function useConversationsQuery() {
           };
         },
       );
+
+      // When the current page becomes empty, refresh from the server to restore a valid cursor chain.
+      if (wasLastVisible) {
+        void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      }
     },
     [queryClient],
   );
