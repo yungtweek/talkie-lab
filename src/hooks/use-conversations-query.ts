@@ -113,13 +113,21 @@ export function useConversationsQuery() {
     (id: string) => {
       queryClient.setQueryData<ListConversationsByUserResult | undefined>(
         ['conversations'],
-        prev =>
-          prev
-            ? {
-                ...prev,
-                items: prev.items.filter(item => item.id !== id),
-              }
-            : prev,
+        prev => {
+          if (!prev) return prev;
+
+          const nextItems = prev.items.filter(item => item.id !== id);
+          const removedCursor = prev.nextCursor === id;
+          const nextCursor = removedCursor
+            ? nextItems[nextItems.length - 1]?.id
+            : prev.nextCursor;
+
+          return {
+            ...prev,
+            items: nextItems,
+            nextCursor,
+          };
+        },
       );
     },
     [queryClient],
