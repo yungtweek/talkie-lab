@@ -308,6 +308,15 @@ export function useChat(
   const abortRef = useRef<AbortController | null>(null);
   const lastHandledSubmissionIdRef = useRef(0);
 
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+      }
+    };
+  }, []);
+
   const setArtifactIdle = useCallback(() => {
     updateArtifact(() => ({
       content: '',

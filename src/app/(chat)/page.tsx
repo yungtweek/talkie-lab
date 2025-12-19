@@ -14,7 +14,6 @@ export default function ChatPage() {
           <Chat conversationId={id} />
         </InferenceConfigProvider>
       </ArtifactProvider>
-      ;
     </>
   );
 }
