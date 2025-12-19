@@ -1,7 +1,8 @@
 'use client';
 
-import { Book, SquarePen, SquareTerminal } from 'lucide-react';
+import { SquarePen, SquareTerminal } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { type User } from 'next-auth';
 import React, { Suspense } from 'react';
 
@@ -18,6 +19,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { cn } from '@/lib/utils';
 
 const items = {
   chat: {
@@ -34,6 +36,7 @@ const items = {
 const { chat, prompts } = items;
 
 export default function AppSidebar({ user }: { user: User | undefined }) {
+  const pathname = usePathname();
   return (
     <Sidebar collapsible="offcanvas">
       <SidebarContent>
@@ -43,7 +46,15 @@ export default function AppSidebar({ user }: { user: User | undefined }) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <Link className="items-center" href={chat.url}>
+                  <Link
+                    className={cn(
+                      'items-center',
+                      pathname === chat.url
+                        ? 'bg-accent text-accent-foreground'
+                        : 'hover:bg-accent/50',
+                    )}
+                    href={chat.url}
+                  >
                     <chat.icon />
                     {chat.title}
                   </Link>
@@ -56,7 +67,15 @@ export default function AppSidebar({ user }: { user: User | undefined }) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <Link className="items-center" href={prompts.url}>
+                  <Link
+                    className={cn(
+                      'items-center',
+                      pathname === prompts.url
+                        ? 'bg-accent text-accent-foreground'
+                        : 'hover:bg-accent/50',
+                    )}
+                    href={prompts.url}
+                  >
                     <prompts.icon />
                     {prompts.title}
                   </Link>
